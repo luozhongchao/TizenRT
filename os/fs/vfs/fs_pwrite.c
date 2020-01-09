@@ -111,7 +111,10 @@ ssize_t file_pwrite(FAR struct file *filep, FAR const void *buf, size_t nbytes, 
 	/* Then perform the write operation */
 
 	ret = file_write(filep, buf, nbytes);
-	errcode = get_errno();
+	if (ret < 0) {
+		errcode = -ret;
+		ret = ERROR;
+	}
 
 	/* Restore the file position */
 
@@ -158,22 +161,29 @@ ssize_t pwrite(int fd, FAR const void *buf, size_t nbytes, off_t offset)
 	FAR struct file *filep;
 	ssize_t ret;
 
-	/* pwrite() is a cancellation point */
+	/* pread() is a cancellation point */
+
 	(void)enter_cancellation_point();
 
 	/* Get the file structure corresponding to the file descriptor. */
 
-	filep = fs_getfilep(fd);
-	if (!filep) {
-		/* The errno value has already been set */
+	ret = (ssize_t)fs_getfilep(fd, &filep);
+	if (ret < 0) {
+		goto errout;
+	}
 
-		ret = (ssize_t)ERROR;
-	} else {
-		/* Let file_pread do the real work */
+	/* Let file_pwrite do the real work */
 
-		ret = file_pwrite(filep, buf, nbytes, offset);
+	ret = file_pwrite(filep, buf, nbytes, offset);
+	if (ret < 0) {
+		goto errout;
 	}
 
 	leave_cancellation_point();
 	return ret;
+
+errout:
+	set_errno((int)-ret);
+	leave_cancellation_point();
+	return (ssize_t)ERROR;
 }

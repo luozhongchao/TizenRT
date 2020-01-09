@@ -176,7 +176,7 @@
 #if SMART_STATUS_VERSION == 1
 #define HEADER_IS_CLEAN(h) ((UINT8TOUINT16(h.logicalsector) == 0xFFFF && h.seq == 0xFF && h.crc8 == 0xFF && h.status == 0xFF))
 #elif SMART_STATUS_VERSION == 2
-#define HEADER_IS_CLEAN(h) ((UINT8TOUINT16(h.logicalsector) == 0xFFFF && h.seq == 0xFF && h.crc16 == 0xFFFF && h.status == 0xFF))
+#define HEADER_IS_CLEAN(h) ((UINT8TOUINT16(h.logicalsector) == 0xFFFF && h.seq == 0xFF && UINT8TOUINT16(h.crc16) == 0xFFFF && h.status == 0xFF))
 #elif SMART_STATUS_VERSION == 3
 #define HEADER_IS_CLEAN(h) ((UINT8TOUINT16(h.logicalsector) == 0xFFFFFFFF && h.seq == 0xFF && h.crc32 == 0xFFFFFFFF && h.status == 0xFF))
 #endif
@@ -186,11 +186,44 @@
 #if SMART_STATUS_VERSION == 1
 #define HEADER_IS_CLEAN(h) ((UINT8TOUINT16(h.logicalsector) == 0x0000 && h.seq == 0x00 && h.crc8 == 0x00 && h.status == 0x00))
 #elif SMART_STATUS_VERSION == 2
-#define HEADER_IS_CLEAN(h) ((UINT8TOUINT16(h.logicalsector) == 0x0000 && h.seq == 0x00 && h.crc16 == 0x0000 && h.status == 0x00))
+#define HEADER_IS_CLEAN(h) ((UINT8TOUINT16(h.logicalsector) == 0x0000 && h.seq == 0x00 && UINT8TOUINT16(h.crc16) == 0x0000 && h.status == 0x00))
 #elif SMART_STATUS_VERSION == 3
 #define HEADER_IS_CLEAN(h) ((UINT8TOUINT16(h.logicalsector) == 0x00000000 && h.seq == 0x00 && h.crc32 == 0x00000000 && h.status == 0x00))
 #endif
 
+#endif
+
+/*The following are CRC8 and CRC16 generated values which are constant 
+ *for a completely erased sector.These CRC values are indicative of the
+ *fact that the sector is indeed completely erased.
+ */
+
+#if CONFIG_SMARTFS_ERASEDSTATE == 0xFF && SMART_STATUS_VERSION == 1
+#if CONFIG_MTD_SMART_SECTOR_SIZE == 256
+#define SMART_ERASEDSTATE_CRC  0
+#elif CONFIG_MTD_SMART_SECTOR_SIZE == 512
+#define SMART_ERASEDSTATE_CRC  255
+#elif CONFIG_MTD_SMART_SECTOR_SIZE == 1024
+#define SMART_ERASEDSTATE_CRC  99
+#elif CONFIG_MTD_SMART_SECTOR_SIZE == 2048
+#define SMART_ERASEDSTATE_CRC  242
+#else
+#define SMART_ERASEDSTATE_CRC  -1
+#endif
+#elif CONFIG_SMARTFS_ERASEDSTATE == 0xFF && SMART_STATUS_VERSION == 2
+#if CONFIG_MTD_SMART_SECTOR_SIZE == 256
+#define SMART_ERASEDSTATE_CRC  65021
+#elif CONFIG_MTD_SMART_SECTOR_SIZE == 512
+#define SMART_ERASEDSTATE_CRC  53981
+#elif CONFIG_MTD_SMART_SECTOR_SIZE == 1024
+#define SMART_ERASEDSTATE_CRC  6113
+#elif CONFIG_MTD_SMART_SECTOR_SIZE == 2048
+#define SMART_ERASEDSTATE_CRC  60280
+#else
+#define SMART_ERASEDSTATE_CRC  -1
+#endif
+#else
+#define SMART_ERASEDSTATE_CRC  -1
 #endif
 
 #define SET_TO_TRUE(v, n) v[n/8] |= (1<<(7-(n%8)))
@@ -2995,6 +3028,8 @@ static int smart_relocate_sector(FAR struct smart_struct_s *dev, uint16_t oldsec
 	FAR struct smart_sect_header_s *header;
 	uint8_t newstatus;
 
+	fvdbg("Entry\n");
+
 	header = (FAR struct smart_sect_header_s *)dev->rwbuffer;
 
 	/* Increment the sequence number and clear the "commit" flag. */
@@ -3123,6 +3158,8 @@ static int smart_relocate_block(FAR struct smart_struct_s *dev, uint16_t block)
 #ifdef CONFIG_MTD_SMART_ENABLE_CRC
 	FAR struct smart_allocsector_s *allocsector;
 #endif
+
+	fvdbg("Entry\n");
 
 	/* Perform collection on block with the most released sectors.
 	 * First mark the block as having no free sectors so we don't
@@ -4016,7 +4053,6 @@ static int smart_validate_crc(FAR struct smart_struct_s *dev)
 {
 	crc_t crc;
 	FAR struct smart_sect_header_s *header;
-
 	/* Calculate CRC on data region of the sector. */
 
 	crc = smart_calc_sector_crc(dev);
@@ -4026,7 +4062,7 @@ static int smart_validate_crc(FAR struct smart_struct_s *dev)
 
 	/* Test 16-bit CRC. */
 
-	if (crc != *((uint16_t *)header->crc16)) {
+	if (crc != *((uint16_t *)header->crc16) && crc != SMART_ERASEDSTATE_CRC) {
 		return -EIO;
 	}
 #elif defined(CONFIG_SMART_CRC_32)
@@ -4036,7 +4072,7 @@ static int smart_validate_crc(FAR struct smart_struct_s *dev)
 	}
 #else
 	/* Test 8-bit CRC for CRC8 & basic case for smart_scan. */
-	if (crc != header->crc8) {
+	if (crc != header->crc8 && crc != SMART_ERASEDSTATE_CRC) {
 		return -EIO;
 	}
 

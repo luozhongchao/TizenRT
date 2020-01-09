@@ -53,20 +53,22 @@
  *
  */
 
-#include <net/lwip/opt.h>
+#include "lwip/opt.h"
 
 #if !NO_SYS						/* don't build if not configured for use in lwipopts.h */
 
-#include <net/lwip/priv/tcpip_priv.h>
-#include <net/lwip/sys.h>
-#include <net/lwip/memp.h>
-#include <net/lwip/mem.h>
-#include <net/lwip/init.h>
-#include <net/lwip/ip.h>
-#include <net/lwip/pbuf.h>
-#include <net/lwip/netif/etharp.h>
-#include <net/lwip/netif/ethernet.h>
-#include <net/lwip/netif/ppp_oe.h>
+#include "lwip/priv/tcpip_priv.h"
+#include "lwip/sys.h"
+#include "lwip/memp.h"
+#include "lwip/mem.h"
+#include "lwip/init.h"
+#include "lwip/ip.h"
+#include "lwip/pbuf.h"
+#include "lwip/netif/etharp.h"
+#include "lwip/netif/ethernet.h"
+#include "lwip/netif/ppp_oe.h"
+#include "lwip/api.h"
+#include "lwip/priv/api_msg.h"
 
 #define TCPIP_MSG_VAR_REF(name)     API_VAR_REF(name)
 #define TCPIP_MSG_VAR_DECLARE(name) API_VAR_DECLARE(struct tcpip_msg, name)
@@ -351,10 +353,11 @@ err_t tcpip_send_msg_wait_sem(tcpip_callback_fn fn, void *apimsg, sys_sem_t *sem
 	return ERR_OK;
 #else							/* LWIP_TCPIP_CORE_LOCKING */
 	TCPIP_MSG_VAR_DECLARE(msg);
+	struct api_msg *p_apimsg = (struct api_msg *)apimsg;
 
 	LWIP_ASSERT("semaphore not initialized", sys_sem_valid(sem));
 	LWIP_ASSERT("Invalid mbox", sys_mbox_valid_val(mbox));
-
+	sys_arch_sem_wait(&p_apimsg->conn->op_sync, 0);
 	TCPIP_MSG_VAR_ALLOC(msg);
 	TCPIP_MSG_VAR_REF(msg).type = TCPIP_MSG_API;
 	TCPIP_MSG_VAR_REF(msg).msg.api_msg.function = fn;
@@ -362,6 +365,7 @@ err_t tcpip_send_msg_wait_sem(tcpip_callback_fn fn, void *apimsg, sys_sem_t *sem
 	sys_mbox_post(&mbox, &TCPIP_MSG_VAR_REF(msg));
 	sys_arch_sem_wait(sem, 0);
 	TCPIP_MSG_VAR_FREE(msg);
+	sys_sem_signal(&p_apimsg->conn->op_sync);
 	return ERR_OK;
 #endif							/* LWIP_TCPIP_CORE_LOCKING */
 }

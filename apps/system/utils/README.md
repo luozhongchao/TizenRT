@@ -6,21 +6,21 @@ These commands can be used in shell, and can be used without shell also like rem
 Most of the commands support *--help* option to show how to use.
 
 ## List of Commands
-| Basic commands | Kernel Commands       | FileSystem Commands |
-|----------------|-----------------------|---------------------|
-| [exit](#exit)  | [date](#date)         | [cat](#cat)         |
-| [help](#help)  | [dmesg](#dmesg)       | [cd](#cd)           |
-| [sh](#sh)      | [free](#free)         | [df](#df)           |
-| [sleep](#sleep)| [getenv/setenv/unsetenv](#getenvsetenvunsetenv) | [echo](#echo) |
-|                | [heapinfo](#heapinfo) | [ls](#ls)               |
-|                | [irqinfo](#irqinfo)   | [mkdir](#mkdir)         |
-|                | [kill/killall](#killkillall) | [mkrd](#mkrd)    |
-|                | [ps](#ps)             | [mksmartfs](#mksmartfs) |
-|                | [reboot](#reboot)     | [mount](#mount)         |
-|                | [stkmon](#stkmon)     | [pwd](#pwd)             |
-|                | [uptime](#uptime)     | [rm](#rm)               |
-|                |                       | [rmdir](#rmdir)         |
-|                |                       | [umount](#umount)       |
+| Basic commands     | Kernel Commands                                 | FileSystem Commands     |
+|--------------------|-------------------------------------------------|-------------------------|
+| [exit](#exit)      | [cpuload](#cpuload)                             | [cat](#cat)             |
+| [help](#help)      | [date](#date)                                   | [cd](#cd)               |
+| [history](#history)| [dmesg](#dmesg)                                 | [df](#df)               |
+| [sh](#sh)          | [free](#free)                                   | [echo](#echo)           |
+| [sleep](#sleep)    | [getenv/setenv/unsetenv](#getenvsetenvunsetenv) | [ls](#ls)               |
+|                    | [heapinfo](#heapinfo)                           | [mkdir](#mkdir)         |
+|                    | [irqinfo](#irqinfo)                             | [mkrd](#mkrd)           |
+|                    | [kill/killall](#killkillall)                    | [mksmartfs](#mksmartfs) |
+|                    | [ps](#ps)                                       | [mount](#mount)         |
+|                    | [reboot](#reboot)                               | [pwd](#pwd)             |
+|                    | [stkmon](#stkmon)                               | [rm](#rm)               |
+|                    | [uptime](#uptime)                               | [rmdir](#rmdir)         |
+|                    |                                                 | [umount](#umount)       |
 
 
 ## exit
@@ -123,6 +123,87 @@ Kernel Features -> Disable TinyAra interfaces -> [ ] Disable environment variabl
 - Set a value which is greater than zero on CONFIG_NFILE_DESCRIPTORS.
 ```
 Kernel Features -> Files and I/O -> Maximum number of file descriptors per task
+```
+
+## cpuload
+This command shows cpuload information per thread periodically. This has arguments which configure the printing information and cpuload daemon.
+```bash
+TASH>>cpuload --help
+
+Usage: cpuload [-OPTION]
+   or: cpuload stop
+Start or Stop cpuload monitor daemon
+
+Options:
+[-OPTION]
+ -s SNAPSHOT_INTERVAL  Start snapshot mode with SNAPSHOT_INTERVAL interval(s)
+ -i PRINT_INTERVAL     Show cpuload values every PRINT_INTERVAL(s)
+ -n ITERATION_COUNT    Iterate showing cpuload values ITERATION_COUNT times
+
+TASH>> cpuload
+Started CPU monitor with interval 5.
+PID | Pri |    2s |
+--------------------------------------------------
+  0 |   0 |  99.1 | Idle Task
+  1 | 224 |   0.0 | hpwork
+  2 | 113 |   0.0 | lpwork
+  3 | 120 |   0.0 | EHCI Monitor
+  4 | 110 |   0.0 | LWIP_TCP/IP
+  5 | 250 |   0.0 | binary_manager
+  7 | 220 |   0.0 | /dev/mtdblock2
+  8 | 221 |   0.0 | msg_receiver
+  9 | 221 |   0.0 | multi_recv_nonblock
+ 10 | 221 |   0.0 | multi_recv_block1
+ 11 | 221 |   0.0 | multi_recv_block2
+ 12 | 180 |   0.0 | /dev/mtdblock4
+ 13 | 100 |   0.0 | uwork
+ 14 | 125 |   0.9 | tash
+ 15 | 100 |   0.0 | CPULoadMonitor
+--------------------------------------------------
+
+TASH>> cpuload -s 10
+CPU monitor will started after 10s with interval 5.
+PID | Pri |  Snap ticks  |
+--------------------------------------------------
+  0 |   0 |   994(100.0) | Idle Task
+  1 | 224 |       0(0.0) | hpwork
+  2 | 113 |       0(0.0) | lpwork
+  3 | 120 |       0(0.0) | EHCI Monitor
+  4 | 110 |       0(0.0) | LWIP_TCP/IP
+  5 | 250 |       0(0.0) | binary_manager
+  7 | 220 |       0(0.0) | /dev/mtdblock2
+  8 | 221 |       0(0.0) | msg_receiver
+  9 | 221 |       0(0.0) | multi_recv_nonblock
+ 10 | 221 |       0(0.0) | multi_recv_block1
+ 11 | 221 |       0(0.0) | multi_recv_block2
+ 12 | 180 |       0(0.0) | /dev/mtdblock4
+ 13 | 100 |       0(0.0) | uwork
+ 14 | 125 |       5(0.5) | tash
+ 15 | 100 |       1(0.1) | CPULoadMonitor
+ * Snapshot interval : 10s (1000 ticks)
+--------------------------------------------------
+```
+### How to Enable
+Enable *CONFIG_ENABLE_CPULOAD* to use this command on menuconfig as shown below:
+```
+Application Configuration -> System Libraries and Add-Ons -> [*] cpuload monitor
+```
+#### Dependency
+Enable SCHED_CPULOAD.
+```
+Kernel Features -> [*] Performance Monitoring -> [*] Enable CPU load monitoring
+```
+Disable FS_PROCFS_EXCLUDE_CPULOAD.
+```
+File Systems -> [*] PROCFS File System -> Exclude individual procfs entries -> [ ] Exclude CPU load
+```
+Disable CONFIG_DISABLE_PTHREAD.
+```
+Kernel Features -> Disable Tinyara interfaces -> [ ] Disable pthread support
+```
+Disable CONFIG_DISABLE_SIGNALS.
+```
+Kernel Features -> Disable Tinyara interfaces -> [ ] Disable signal support
 ```
 
 
@@ -325,21 +406,27 @@ This command shows heap memory usages per thread. This has arguments which confi
 ```bash
 TASH>>heapinfo --help
 
-Usage: heapinfo [OPTIONS]
+Usage: heapinfo [-TARGET] [-OPTION]
 Display information of heap memory
 
 Options:
- -i           Initialize the heapinfo
- -a           Show the all allocation details
- -p PID       Show the specific PID allocation details
- -f           Show the free list
- -g           Show the User defined group allocation details
-              (for -g option, CONFIG_HEAPINFO_GROUP is needed)
- -e HEAP_IDX  Show the heap[HEAP_IDX] allocation details
-              (-e option is available when CONFIG_MM_NHEAPS is greater than 1)
- -r           Show the all region information
-              (-r option is available when CONFIG_MM_REGIONS is greater than 1)
- -k OPTION    Show the kernel heap memory allocation details based on above options
+[-TARGET]
+ -k             Kernel Heap
+                (-k target is available when CONFIG_BUILD_PROTECTED is enabled)
+ -u             User Heap
+                (-u target is available when CONFIG_BUILD_PROTECTED is enabled)
+ -b BIN_NAME    Heap for BIN_NAME binary
+                (-b target is available when CONFIG_APP_BINARY_SEPARATION is enabled)
+[-OPTION]
+ -a             Show the all allocation details
+ -p PID         Show the specific PID allocation details
+ -f             Show the free list
+ -g             Show the User defined group allocation details
+                (for -g option, CONFIG_HEAPINFO_GROUP is needed)
+ -e HEAP_IDX    Show the heap[HEAP_IDX] allocation details
+                (-e option is available when CONFIG_MM_NHEAPS is greater than 1)
+ -r             Show the all region information
+                (-r option is available when CONFIG_MM_REGIONS is greater than 1)
 
 TASH>>heapinfo
 
@@ -419,6 +506,46 @@ Heap Allocation Information per User defined Group
 ```
 
 
+## history
+This command shows the history you executed, and you can re-execute it by calling the number with `!`.
+```bash
+TASH>>history
+         TASH command history
+         --------------------
+ 1       history
+ 2       help
+ 3       sleep 1
+ 4       ps
+ 5       help
+ 6       echo test
+ 7       ls
+ 8       history
+TASH>>!2
+         TASH command list
+         --------------------
+arastorage_itc   arastorage_utc   cat              cd
+date             df               dhcpd            drivers_tc
+echo             exit             filesystem_tc    free
+getenv           heapinfo         help             history
+ifconfig         ifdown           ifup             iperf
+kernel_tc        kill             killall          ls
+mkdir            mount            netdb            netmon
+network_tc       ntpclient        ps               pwd
+reboot           rm               rmdir            setenv
+sleep            start_itc_sampl  stkmon           sysio_itc
+sysio_utc        taskmgr_itc      taskmgr_utc      tm_broadcast1
+tm_broadcast2    tm_broadcast3    tm_itc           tm_sample
+tm_sample_itc    tm_utc           umount           unsetenv
+uptime           wm_test
+TASH>>
+```
+
+### How to Enable
+Set *CONFIG_TASH_MAX_STORE_COMMANDS* value to use this command on menuconfig as shown below:
+```
+Application Configuration -> Shell -> [*] Enable shell -> set the value of Max number of stored TASH commands
+```
+When it has 0 value, `history` command is disabled.
 
 ## irqinfo
 This command shows the number of registered interrupts, it's occurrence counts and corresponding isr.

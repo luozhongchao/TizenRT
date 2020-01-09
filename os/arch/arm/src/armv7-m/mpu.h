@@ -93,9 +93,9 @@
 /* MPU Type Register Bit Definitions */
 
 #define MPU_TYPE_SEPARATE       (1 << 0)	/* Bit 0: 0:unified or 1:separate memory maps */
-#define MPU_TYPE_DREGION_SHIFT  (8)	/* Bits 8-15: Number MPU data regions */
+#define MPU_TYPE_DREGION_SHIFT  (8)			/* Bits 8-15: Number MPU data regions */
 #define MPU_TYPE_DREGION_MASK   (0xff << MPU_TYPE_DREGION_SHIFT)
-#define MPU_TYPE_IREGION_SHIFT  (16)	/* Bits 16-23: Number MPU instruction regions */
+#define MPU_TYPE_IREGION_SHIFT  (16)		/* Bits 16-23: Number MPU instruction regions */
 #define MPU_TYPE_IREGION_MASK   (0xff << MPU_TYPE_IREGION_SHIFT)
 
 /* MPU Control Register Bit Definitions */
@@ -131,7 +131,7 @@
 #define MPU_RASR_SIZE_SHIFT     (1)	/* Bits 1-5: Size of the MPU protection region */
 
 #define MPU_RASR_SIZE_MASK      (31 << MPU_RASR_SIZE_SHIFT)
-#define MPU_RASR_SIZE_LOG2(n) ((n-1) << MPU_RASR_SIZE_SHIFT)
+#define MPU_RASR_SIZE_LOG2(n) ((n - 1) << MPU_RASR_SIZE_SHIFT)
 #define MPU_RASR_SRD_SHIFT      (8)	/* Bits 8-15: Subregion disable */
 #define MPU_RASR_SRD_MASK       (0xff << MPU_RASR_SRD_SHIFT)
 #define MPU_RASR_SRD_0        (0x01 << MPU_RASR_SRD_SHIFT)
@@ -667,10 +667,20 @@ static inline void up_set_mpu_app_configuration(struct tcb_s *rtcb)
 	 * This is not a kernel thread AND
 	 * It has a non zero value of base address (This ensures valid MPU setting)
 	 */
-	if ((rtcb->flags & TCB_FLAG_TTYPE_MASK) != TCB_FLAG_TTYPE_KERNEL && rtcb->mpu_regs[REG_RBAR]) {
-		putreg32(rtcb->mpu_regs[REG_RNR], MPU_RNR);
-		putreg32(rtcb->mpu_regs[REG_RBAR], MPU_RBAR);
-		putreg32(rtcb->mpu_regs[REG_RASR], MPU_RASR);
+	int i = 0;
+	if ((rtcb->flags & TCB_FLAG_TTYPE_MASK) == TCB_FLAG_TTYPE_KERNEL) {
+		return;
+	}
+
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+	for (i = 0; i < 3 * MPU_NUM_REGIONS; i += 3)
+#endif
+	{
+		if (rtcb->mpu_regs[i + REG_RBAR]) {
+			putreg32(rtcb->mpu_regs[i + REG_RNR], MPU_RNR);
+			putreg32(rtcb->mpu_regs[i + REG_RBAR], MPU_RBAR);
+			putreg32(rtcb->mpu_regs[i + REG_RASR], MPU_RASR);
+		}
 	}
 }
 #else

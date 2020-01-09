@@ -148,15 +148,19 @@ endif
 CONTEXTDIRS = $(APPDIR)
 CONTEXTDIRS += $(TOOLSDIR)
 CONTEXTDIRS += mm
+CONTEXTDIRS += wqueue
 #ifeq ($(CONFIG_ENABLE_IOTIVITY),y)
 #CONTEXTDIRS += $(EXTDIR)$(DELIM)iotivity
 #endif
+ifeq ($(CONFIG_STDK_IOT_CORE),y)
+CONTEXTDIRS += $(EXTDIR)$(DELIM)stdk
+endif
 USERDIRS =
 OTHERDIRS = $(LIBRARIES_DIR)
 
 ifeq ($(CONFIG_BUILD_PROTECTED),y)
 
-USERDIRS += $(LIB_DIR)$(DELIM)libc mm $(USER_ADDONS)
+USERDIRS += $(LIB_DIR)$(DELIM)libc mm wqueue$(USER_ADDONS)
 ifeq ($(CONFIG_HAVE_CXX),y)
 USERDIRS += $(LIB_DIR)$(DELIM)libxx
 endif
@@ -164,14 +168,14 @@ endif
 else
 ifeq ($(CONFIG_BUILD_KERNEL),y)
 
-USERDIRS += $(LIB_DIR)$(DELIM)libc mm
+USERDIRS += $(LIB_DIR)$(DELIM)libc mm wqueue
 ifeq ($(CONFIG_HAVE_CXX),y)
 USERDIRS += $(LIB_DIR)$(DELIM)libxx
 endif
 
 else
 
-NONFSDIRS += $(LIB_DIR)$(DELIM)libc mm
+NONFSDIRS += $(LIB_DIR)$(DELIM)libc mm wqueue
 OTHERDIRS += $(USER_ADDONS)
 ifeq ($(CONFIG_HAVE_CXX),y)
 NONFSDIRS += $(LIB_DIR)$(DELIM)libxx
@@ -261,7 +265,7 @@ KERNDEPDIRS += logm
 endif
 CLEANDIRS += logm
 
-ifeq ($(CONFIG_LOGM),y)
+ifeq ($(CONFIG_SE),y)
 KERNDEPDIRS += se
 endif
 CLEANDIRS += se

@@ -158,7 +158,12 @@ struct elf_loadinfo_s {
 #endif
 
 #ifdef CONFIG_APP_BINARY_SEPARATION
-	struct mm_heap_s *uheap;		/* User heap pointer to allocate memory for sections */
+	struct binary_s *binp;				/* Back pointer to binary object */
+#endif
+
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+	uintptr_t roalloc;			/* Allocation start for ro section */
+	size_t rosize;				/* Allocation size for ro section */
 #endif
 
 	uint16_t symtabidx;			/* Symbol table section index */
@@ -167,6 +172,8 @@ struct elf_loadinfo_s {
 	int filfd;					/* Descriptor for the file being loaded */
 	uint16_t offset;             /* elf offset when binary header is included */
 	uint8_t compression_type;		/* Binary Compression type */
+	uintptr_t symtab;			/* Copy of symbol table */
+	uintptr_t reltab;			/* Copy of relocation table */
 };
 
 /****************************************************************************

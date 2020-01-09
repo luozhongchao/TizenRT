@@ -72,6 +72,8 @@
 
 static inline char *getfilepath(const char *name)
 {
+	char *line = get_line_ptr();
+
 	snprintf(line, PATH_MAX, "%s/" DEFCONFIG, name);
 	line[PATH_MAX] = '\0';
 	return strdup(line);
@@ -206,6 +208,18 @@ int main(int argc, char **argv, char **envp)
 	printf("#ifndef CONFIG_MM_REGIONS\n");
 	printf("# define CONFIG_MM_REGIONS 1\n");
 	printf("#endif\n\n");
+	printf("#ifdef CONFIG_MM_KERNEL_HEAP\n");
+	printf("#ifndef CONFIG_KMM_REGIONS\n");
+	printf("# define CONFIG_KMM_REGIONS 1\n");
+	printf("#endif\n");
+	printf("#if CONFIG_KMM_REGIONS > CONFIG_MM_REGIONS\n");
+	printf("#define CONFIG_MM_REGION_NUM CONFIG_KMM_REGIONS\n");
+	printf("#else\n");
+	printf("#define CONFIG_MM_REGION_NUM CONFIG_MM_REGIONS\n");
+	printf("#endif\n");
+	printf("#else\n");
+	printf("#define CONFIG_MM_REGION_NUM CONFIG_MM_REGIONS\n");
+	printf("#endif\n");
 	printf("/* If the end of FLASH is not specified then it is assumed to be the beginning\n");
 	printf(" * of FLASH plus the FLASH size.\n");
 	printf(" */\n\n");
@@ -251,12 +265,14 @@ int main(int argc, char **argv, char **envp)
 	printf("# define CONFIG_FS_WRITABLE 1\n");
 	printf("#endif\n\n");
 
-	printf("/* The correct way to disable socket support is to set the number of\n");
-	printf(" * socket descriptors to zero.\n");
-	printf(" */\n\n");
-	printf("#ifndef CONFIG_NSOCKET_DESCRIPTORS\n");
-	printf("#  define CONFIG_NSOCKET_DESCRIPTORS 0\n");
+	printf("/* The number of socket descriptors is the sum of each socket(LWIP, UDS) */\n\n");
+	printf("#ifndef CONFIG_NBSDSOCKET_DESCRIPTORS\n");
+	printf("# define CONFIG_NBSDSOCKET_DESCRIPTORS 0\n");
 	printf("#endif\n\n");
+	printf("#ifndef CONFIG_NUDS_DESCRIPTORS\n");
+	printf("# define CONFIG_NUDS_DESCRIPTORS 0\n");
+	printf("#endif\n\n");
+	printf("#define CONFIG_NSOCKET_DESCRIPTORS (CONFIG_NBSDSOCKET_DESCRIPTORS + CONFIG_NUDS_DESCRIPTORS)\n\n");
 
 	printf("/* There can be no network support with no socket descriptors */\n\n");
 	printf("#if CONFIG_NSOCKET_DESCRIPTORS <= 0\n");

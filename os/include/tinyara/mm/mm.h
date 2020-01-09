@@ -215,6 +215,7 @@
 #define HEAPINFO_DETAIL_PID 3
 #define HEAPINFO_DETAIL_FREE 4
 #define HEAPINFO_DETAIL_SPECIFIC_HEAP 5
+#define HEAPINFO_INIT_PEAK 6
 #define HEAPINFO_PID_ALL -1
 
 #define HEAPINFO_INIT_INFO -1
@@ -388,12 +389,15 @@ struct mm_heap_s {
 #endif
 
 	/* This is the first and last nodes of the heap */
+	FAR struct mm_allocnode_s *mm_heapstart[CONFIG_MM_REGION_NUM];
+	FAR struct mm_allocnode_s *mm_heapend[CONFIG_MM_REGION_NUM];
 
-	FAR struct mm_allocnode_s *mm_heapstart[CONFIG_MM_REGIONS];
-	FAR struct mm_allocnode_s *mm_heapend[CONFIG_MM_REGIONS];
-
-#if CONFIG_MM_REGIONS > 1
+#if (CONFIG_MM_REGIONS > 1) || (defined(CONFIG_MM_KERNEL_HEAP) && (CONFIG_KMM_REGIONS > 1))
 	int mm_nregions;
+#endif
+
+#ifdef CONFIG_APP_BINARY_SEPARATION
+	size_t elf_sections_size;
 #endif
 
 	/* All free nodes are maintained in a doubly linked list.  This
@@ -416,12 +420,6 @@ extern "C" {
 #define EXTERN extern
 #endif
 
-#ifdef CONFIG_MM_KERNEL_HEAP
-/* This is the kernel heap */
-
-EXTERN struct mm_heap_s g_kmmheap;
-#endif
-
 #if defined(CONFIG_ARCH_ADDRENV) && defined(CONFIG_BUILD_KERNEL)
 /* In the kernel build, there are multiple user heaps; one for each task
  * group.  In this build configuration, the user heap structure lies
@@ -441,7 +439,7 @@ extern uint32_t _stext;
 #include <tinyara/userspace.h>
 
 #ifdef CONFIG_APP_BINARY_SEPARATION
-#define USR_HEAP_TCB ((struct mm_heap_s *)((struct tcb_s*)sched_self())->ram_start)
+#define USR_HEAP_TCB ((struct mm_heap_s *)((struct tcb_s*)sched_self())->uheap)
 #define USR_HEAP_CFG ((struct mm_heap_s *)(*(uint32_t *)(CONFIG_TINYARA_USERSPACE + sizeof(struct userspace_s))))
 #define BASE_HEAP (USR_HEAP_TCB == NULL ? USR_HEAP_CFG : USR_HEAP_TCB)
 #else
@@ -672,6 +670,10 @@ int kmm_mallinfo(struct mallinfo *info);
 #endif
 #endif							/* CONFIG_CAN_PASS_STRUCTS */
 
+#ifdef CONFIG_MM_KERNEL_HEAP
+struct mm_heap_s *kmm_get_heap(void);
+#endif
+
 /* Functions contained in mm_shrinkchunk.c **********************************/
 
 void mm_shrinkchunk(FAR struct mm_heap_s *heap, FAR struct mm_allocnode_s *node, size_t size);
@@ -713,6 +715,7 @@ void mm_initialize_app_heap(void);
 void mm_add_app_heap_list(struct mm_heap_s *heap, char *app_name);
 void mm_remove_app_heap_list(struct mm_heap_s *heap);
 struct mm_heap_s *mm_get_app_heap_with_name(char *app_name);
+char *mm_get_app_heap_name(void *address);
 #endif
 
 #if CONFIG_MM_NHEAPS > 1
@@ -732,6 +735,21 @@ typedef struct heapinfo_total_info_s heapinfo_total_info_t;
  * @cond
  * @internal
  */
+#ifdef CONFIG_MM_KERNEL_HEAP
+#if CONFIG_KMM_NHEAPS > 1
+void *kmm_malloc_at(int heap_index, size_t size);
+void *kmm_calloc_at(int heap_index, size_t n, size_t elem_size);
+void *kmm_memalign_at(int heap_index, size_t alignment, size_t size);
+void *kmm_realloc_at(int heap_index, void *oldmem, size_t size);
+void *kmm_zalloc_at(int heap_index, size_t size);
+#else
+#define kmm_malloc_at(heap_index, size)              kmm_malloc(size)
+#define kmm_calloc_at(heap_index, n, elem_size)      kmm_calloc(n, elem_size)
+#define kmm_memalign_at(heap_index, alignment, size) kmm_memalign(alignment, size)
+#define kmm_realloc_at(heap_index, oldmem, size)     kmm_realloc(oldmem, size)
+#define kmm_zalloc_at(heap_index, size)              kmm_zalloc(size)
+#endif
+#endif
 
 /**
  * @brief Allocate memory to the specific heap.
@@ -821,10 +839,22 @@ struct mm_ram_partition_s {
 
 /* Functions contained in mm_partition_mgr.c **************************************/
 void mm_initialize_ram_partitions(void);
-int8_t mm_allocate_ram_partition(uint32_t **start_addr, uint32_t *size, char *name);
+int8_t mm_allocate_ram_partition(uint32_t **start_addr, uint32_t *size);
 void mm_free_ram_partition(uint32_t address);
 
 #endif		/* defined(CONFIG_APP_BINARY_SEPARATION) && defined(__KERNEL__) */
+
+static inline uint32_t mm_align_up_by_size(uint32_t address, uint32_t size)
+{
+	uint32_t align_mask = size - 1;
+	return ((address + align_mask) & ~align_mask);
+}
+
+static inline uint32_t mm_align_down_by_size(uint32_t address, uint32_t size)
+{
+	uint32_t align_mask = size - 1;
+	return (address & ~align_mask);
+}
 
 #undef EXTERN
 #ifdef __cplusplus

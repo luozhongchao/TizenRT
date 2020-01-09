@@ -86,11 +86,18 @@
 /********************************************************************************
  * Pre-processor Definitions
  ********************************************************************************/
-#ifdef CONFIG_ARMV7M_MPU
-#define REG_RNR		0
-#define REG_RBAR	1
-#define REG_RASR	2
-#define MPU_REGS	3
+#if defined(CONFIG_APP_BINARY_SEPARATION) && defined(CONFIG_ARMV7M_MPU)
+enum {
+	REG_RNR,
+	REG_RBAR,
+	REG_RASR
+};
+
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+#define MPU_NUM_REGIONS		3
+#else
+#define MPU_NUM_REGIONS		1
+#endif
 #endif
 /* Configuration ****************************************************************/
 /* Task groups currently only supported for retention of child status */
@@ -615,14 +622,18 @@ struct tcb_s {
 	uint32_t ram_start;		/* Start address of RAM partition for this app */
 	uint32_t ram_size;		/* Size of RAM partition for this app */
 	uint32_t uspace;		/* User space object for app binary */
+	uint32_t uheap;			/* User heap object pointer */
 
 #ifdef CONFIG_ARMV7M_MPU
-	uint32_t mpu_regs[MPU_REGS];
+	uint32_t mpu_regs[3 * MPU_NUM_REGIONS];	/* We need 3 register values to configure each MPU region */
 #endif
 #endif
 
 #if CONFIG_TASK_NAME_SIZE > 0
 	char name[CONFIG_TASK_NAME_SIZE + 1];	/* Task name (with NUL terminator)     */
+#endif
+#ifdef CONFIG_TASK_MONITOR
+	bool is_active;
 #endif
 };
 
@@ -824,6 +835,12 @@ FAR struct streamlist *sched_getstreams(void);
 #if CONFIG_NSOCKET_DESCRIPTORS > 0
 FAR struct socketlist *sched_getsockets(void);
 #endif							/* CONFIG_NSOCKET_DESCRIPTORS */
+
+#ifdef CONFIG_SCHED_CPULOAD
+int sched_start_cpuload_snapshot(int ticks);
+void sched_clear_cpuload_snapshot(void);
+void sched_get_cpuload_snapshot(pid_t *result_addr);
+#endif
 
 /********************************************************************************
  * Name: task_starthook

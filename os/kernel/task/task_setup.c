@@ -458,12 +458,19 @@ static int thread_schedsetup(FAR struct tcb_s *tcb, int priority, start_t start,
 		tcb->ram_start = rtcb->ram_start;
 		tcb->ram_size = rtcb->ram_size;
 		tcb->uspace = rtcb->uspace;
+		tcb->uheap = rtcb->uheap;
 
 		/* Copy the MPU register values from parent to child task */
 #ifdef CONFIG_ARMV7M_MPU
-		tcb->mpu_regs[REG_RNR] = rtcb->mpu_regs[REG_RNR];
-		tcb->mpu_regs[REG_RBAR] = rtcb->mpu_regs[REG_RBAR];
-		tcb->mpu_regs[REG_RASR] = rtcb->mpu_regs[REG_RASR];
+		int i = 0;
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+		for (; i < 3 * MPU_NUM_REGIONS; i += 3)
+#endif
+		{
+			tcb->mpu_regs[i + REG_RNR] = rtcb->mpu_regs[i + REG_RNR];
+			tcb->mpu_regs[i + REG_RBAR] = rtcb->mpu_regs[i + REG_RBAR];
+			tcb->mpu_regs[i + REG_RASR] = rtcb->mpu_regs[i + REG_RASR];
+		}
 #endif
 
 #endif
@@ -614,7 +621,7 @@ static inline int task_stackargsetup(FAR struct task_tcb_s *tcb, FAR char *const
 
 	stackargv[0] = str;
 	nbytes = strlen(name) + 1;
-	strcpy(str, name);
+	strncpy(str, name, nbytes);
 	str += nbytes;
 
 	/* Copy each argument */
@@ -627,7 +634,7 @@ static inline int task_stackargsetup(FAR struct task_tcb_s *tcb, FAR char *const
 
 		stackargv[i + 1] = str;
 		nbytes = strlen(argv[i]) + 1;
-		strcpy(str, argv[i]);
+		strncpy(str, argv[i], nbytes);
 		str += nbytes;
 	}
 

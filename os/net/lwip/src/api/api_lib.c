@@ -56,22 +56,22 @@
 /* This is the part of the API that is linked with
    the application */
 
-#include <net/lwip/opt.h>
+#include "lwip/opt.h"
 
 #if LWIP_NETCONN				/* don't build if not configured for use in lwipopts.h */
 
-#include <net/lwip/api.h>
-#include <net/lwip/tcpip.h>
-#include <net/lwip/memp.h>
+#include "lwip/api.h"
+#include "lwip/tcpip.h"
+#include "lwip/memp.h"
 
-#include <net/lwip/ip.h>
-#include <net/lwip/raw.h>
-#include <net/lwip/udp.h>
-#include <net/lwip/tcp.h>
+#include "lwip/ip.h"
+#include "lwip/raw.h"
+#include "lwip/udp.h"
+#include "lwip/tcp.h"
 
-#include <net/lwip/priv/api_msg.h>
-#include <net/lwip/priv/tcp_priv.h>
-#include <net/lwip/priv/tcpip_priv.h>
+#include "lwip/priv/api_msg.h"
+#include "lwip/priv/tcp_priv.h"
+#include "lwip/priv/tcpip_priv.h"
 
 #include <string.h>
 
@@ -145,6 +145,9 @@ struct netconn *netconn_new_with_proto_and_callback(enum netconn_type t, u8_t pr
 #if !LWIP_NETCONN_SEM_PER_THREAD
 			LWIP_ASSERT("conn has no op_completed", sys_sem_valid(&conn->op_completed));
 			sys_sem_free(&conn->op_completed);
+			sys_sem_set_invalid(&conn->op_completed);
+			sys_sem_free(&conn->op_sync);
+			sys_sem_set_invalid(&conn->op_sync);
 #endif							/* !LWIP_NETCONN_SEM_PER_THREAD */
 			sys_mbox_free(&conn->recvmbox);
 			memp_free(MEMP_NETCONN, conn);

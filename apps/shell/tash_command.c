@@ -20,6 +20,7 @@
 
 #include <pthread.h>
 #include <tinyara/config.h>
+#include <tinyara/ascii.h>
 #include <string.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -53,6 +54,17 @@
 #endif
 #define TASH_CMDS_PER_LINE			(4)
 
+#if TASH_MAX_STORE > 0
+#define CMD_INDEX_UP(x)                                   \
+	do {                                                  \
+		((x) == TASH_MAX_STORE - 1) ? (x) = 0 : (x)++;    \
+	} while (0)
+
+#define CMD_INDEX_DOWN(x)                                 \
+	do {                                                  \
+		((x) == 0) ? (x) = TASH_MAX_STORE - 1 : (x)--;    \
+	} while (0)
+#endif
 /****************************************************************************
  * Global Variables
  ****************************************************************************/
@@ -86,6 +98,9 @@ static int tash_exit(int argc, char **args);
 #if defined(CONFIG_BOARDCTL_RESET)
 static int tash_reboot(int argc, char **argv);
 #endif
+#if TASH_MAX_STORE   > 0
+static int tash_history(int argc, char **argv);
+#endif
 
 /****************************************************************************
  * Private Variables
@@ -109,8 +124,19 @@ const static tash_cmdlist_t tash_basic_cmds[] = {
 #if defined(CONFIG_BOARDCTL_RESET)
 	{"reboot", tash_reboot, TASH_EXECMD_SYNC},
 #endif
+#if TASH_MAX_STORE > 0
+	{"history", tash_history, TASH_EXECMD_SYNC},
+#endif
 	{NULL,    NULL,        0}
 };
+
+#if TASH_MAX_STORE   > 0
+static char cmd_store[TASH_MAX_STORE][TASH_LINEBUFLEN];
+static char cmd_line[TASH_LINEBUFLEN];
+static int cmd_pos;
+static int cmd_head;
+static int cmd_tail;
+#endif
 
 /****************************************************************************
  * Private Functions
@@ -174,6 +200,126 @@ static int tash_exit(int argc, char **args)
 	tash_stop();
 	exit(0);
 }
+
+/** @brief Help function in TASH to list all available commands
+ *  @ingroup tash
+ */
+
+#if TASH_MAX_STORE > 0
+static int tash_history(int argc, char **args)
+{
+	int cmd_idx = 1;
+
+	printf("\t TASH command history\n");
+	printf("\t --------------------\n");
+
+	int head_idx = cmd_head;
+	while (head_idx != cmd_tail) {
+		printf(" %d \t %s\n", cmd_idx++, cmd_store[head_idx]);
+		CMD_INDEX_UP(head_idx);
+	}
+
+	return 0;
+}
+
+void tash_get_cmd_from_history(int num, char *cmd)
+{
+	if (num < 1 || num >= TASH_MAX_STORE) {
+		return;
+	}
+
+	int head_idx = cmd_head;
+	int pos = 0;
+
+	head_idx += (num - 1);
+
+	if (head_idx >= TASH_MAX_STORE) {
+		head_idx -= TASH_MAX_STORE;
+	}
+	if (head_idx >= cmd_tail) {
+		return;
+	}
+
+	while (cmd_store[head_idx][pos] != 0) {
+		cmd[pos] = cmd_store[head_idx][pos];
+		pos++;
+	}
+}
+
+void tash_store_cmd(char *cmd)
+{
+	/* If there is no command, it is not saved. */
+	if (cmd == NULL || cmd[0] == '\0') {
+		return;
+	}
+
+	if (cmd_head != cmd_tail) {
+		/* If it is the same as the previous command, it is not saved. */
+		int prev = cmd_tail;
+		CMD_INDEX_DOWN(prev);
+
+		if (strncmp(cmd_store[prev], cmd, TASH_LINEBUFLEN) == 0) {
+			return;
+		}
+	}
+
+	/* Save current command. */
+	strncpy(cmd_store[cmd_tail], cmd, TASH_LINEBUFLEN);
+	CMD_INDEX_UP(cmd_tail);
+
+	/* Move the head when the storage space is full. */
+	if (cmd_tail == cmd_head) {
+		CMD_INDEX_UP(cmd_head);
+	}
+	cmd_pos = cmd_tail;
+}
+
+bool tash_search_cmd(char *cmd, int *pos, char status)
+{
+	int idx = 0;
+	if (cmd_pos == cmd_tail) {
+		if (status == ASCII_A) {
+			strncpy(cmd_line, cmd, TASH_LINEBUFLEN);
+		} else {
+			return false;
+		}
+	} else if (cmd_pos == cmd_head && status == ASCII_A) {
+		return false;
+	} else {
+		/* Save current command. */
+		while (idx < TASH_LINEBUFLEN && cmd[idx] != 0) {
+			cmd_store[cmd_pos][idx] = cmd[idx];
+			idx++;
+		}
+		cmd_store[cmd_pos][idx] = 0;
+	}
+
+	if (status == ASCII_A) { // up
+		CMD_INDEX_DOWN(cmd_pos);
+		*pos = 0;
+
+		while (*pos < TASH_LINEBUFLEN && cmd_store[cmd_pos][*pos] != 0) {
+			cmd[*pos] = cmd_store[cmd_pos][*pos];
+			(*pos)++;
+		}
+	} else if (status == ASCII_B) { // down
+		CMD_INDEX_UP(cmd_pos);
+		*pos = 0;
+		if (cmd_pos == cmd_tail) {
+			while (*pos < TASH_LINEBUFLEN && cmd_line[*pos] != 0) {
+				cmd[*pos] = cmd_line[*pos];
+				(*pos)++;
+			}
+		} else {
+			while (*pos < TASH_LINEBUFLEN && cmd_store[cmd_pos][*pos] != 0) {
+				cmd[*pos] = cmd_store[cmd_pos][*pos];
+				(*pos)++;
+			}
+		}
+	}
+	return true;
+}
+#endif
 
 #if defined(CONFIG_BOARDCTL_RESET)
 static int tash_reboot(int argc, char **argv)
@@ -267,6 +413,58 @@ int tash_execute_cmd(char **args, int argc)
 	}
 
 	return 0;					/* Need to pass the appropriate error later */
+}
+
+/** @name tash_do_autocomplete
+ * @brief API to TASH tab commands
+ * @ingroup tash
+ * @param[in] cmd - command's first string
+ * @param[in] pos - length of command's first string
+ * @param[in] double_tab : true - tab is pressed more than once
+ *                         false - tab is pressed once
+ */
+bool tash_do_autocomplete(char *cmd, int *pos, bool double_tab)
+{
+	int cmd_idx;
+	bool ret = false;
+	int found_cnt = 0;
+	int idx;
+	uint16_t matched[TASH_MAX_COMMANDS] = {0,};
+
+	/* lock mutex */
+	pthread_mutex_lock(&tash_cmds_info.tmutex);
+
+	for (cmd_idx = 0; cmd_idx < tash_cmds_info.count; cmd_idx++) {
+		/* search for commands starting with cmd */
+		if (strncmp(cmd, tash_cmds_info.cmd[cmd_idx].str, *pos) == 0) {
+			matched[found_cnt++] = cmd_idx;
+		}
+	}
+
+	if (found_cnt == 1 && double_tab == false) {
+		idx = matched[0];
+		/* If it finds only one, it autocompletes the command */
+		while (tash_cmds_info.cmd[idx].str[*pos] != 0) {
+			cmd[*pos] = tash_cmds_info.cmd[idx].str[*pos];
+			(*pos)++;
+		}
+		ret = true;
+	} else if (found_cnt > 1 && double_tab == true) {
+		printf("\n");
+		for (int cnt = 0; cnt < found_cnt; cnt++) {
+			idx = matched[cnt];
+			/* Show commands starting with cmd */
+			printf("%-16s ", tash_cmds_info.cmd[idx].str);
+			if (cnt % TASH_CMDS_PER_LINE == (TASH_CMDS_PER_LINE - 1) && cnt != found_cnt - 1) {
+				printf("\n");
+			}
+		}
+		printf("\n");
+		ret = true;
+	}
+	/* unlock mutex */
+	pthread_mutex_unlock(&tash_cmds_info.tmutex);
+	return ret;
 }
 
 /** @name tash_cmd_install

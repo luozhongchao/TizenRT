@@ -96,7 +96,6 @@
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-
 /****************************************************************************
  * Name: elf_elfsize
  *
@@ -113,6 +112,9 @@ static void elf_elfsize(struct elf_loadinfo_s *loadinfo)
 {
 	size_t textsize;
 	size_t datasize;
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+	size_t rosize = 0;
+#endif
 	int i;
 
 	/* Accumulate the size each section into memory that is marked SHF_ALLOC */
@@ -134,16 +136,27 @@ static void elf_elfsize(struct elf_loadinfo_s *loadinfo)
 
 			if ((shdr->sh_flags & SHF_WRITE) != 0) {
 				datasize += ELF_ALIGNUP(shdr->sh_size);
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+			} else if ((shdr->sh_flags & SHF_EXECINSTR) != 0) {
+				textsize += ELF_ALIGNUP(shdr->sh_size);
+			} else {
+				rosize += ELF_ALIGNUP(shdr->sh_size);
+			}
+#else
 			} else {
 				textsize += ELF_ALIGNUP(shdr->sh_size);
 			}
+#endif
 		}
 	}
 
 	/* Save the allocation size */
-
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+	loadinfo->rosize = rosize;
+#endif
 	loadinfo->textsize = textsize;
 	loadinfo->datasize = datasize;
+
 }
 
 /****************************************************************************
@@ -163,6 +176,9 @@ static inline int elf_loadfile(FAR struct elf_loadinfo_s *loadinfo)
 {
 	FAR uint8_t *text;
 	FAR uint8_t *data;
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+	FAR uint8_t *ro;
+#endif
 	FAR uint8_t **pptr;
 	int ret;
 	int i;
@@ -172,6 +188,9 @@ static inline int elf_loadfile(FAR struct elf_loadinfo_s *loadinfo)
 	binfo("Loaded sections:\n");
 	text = (FAR uint8_t *)loadinfo->textalloc;
 	data = (FAR uint8_t *)loadinfo->dataalloc;
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+	ro = (FAR uint8_t *)loadinfo->roalloc;
+#endif
 
 	for (i = 0; i < loadinfo->ehdr.e_shnum; i++) {
 		FAR Elf32_Shdr *shdr = &loadinfo->shdr[i];
@@ -189,9 +208,18 @@ static inline int elf_loadfile(FAR struct elf_loadinfo_s *loadinfo)
 
 		if ((shdr->sh_flags & SHF_WRITE) != 0) {
 			pptr = &data;
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+		} else if ((shdr->sh_flags & SHF_EXECINSTR) != 0) {
+			pptr = &text;
+		} else {
+			pptr = &ro;
+		}
+#else
 		} else {
 			pptr = &text;
 		}
+#endif
+
 
 		/* SHT_NOBITS indicates that there is no data in the file for the
 		 * section.
@@ -212,6 +240,10 @@ static inline int elf_loadfile(FAR struct elf_loadinfo_s *loadinfo)
 		 */
 
 		else {
+#ifdef CONFIG_OPTIMIZE_APP_RELOAD_TIME
+			loadinfo->binp->bssstart = *pptr;
+			loadinfo->binp->bsssize = shdr->sh_size;
+#endif
 			memset(*pptr, 0, shdr->sh_size);
 		}
 
@@ -350,6 +382,16 @@ int elf_load(FAR struct elf_loadinfo_s *loadinfo)
 		berr("ERROR: elf_addrenv_restore() failed: %d\n", ret);
 		goto errout_with_buffers;
 	}
+#endif
+
+#if defined(CONFIG_DEBUG_MM_HEAPINFO) && defined(CONFIG_APP_BINARY_SEPARATION)
+	/* Save the text and data region size of new binary into its heap
+	 * for excluding those size when calculating the heap usage.
+	 */
+	loadinfo->uheap->elf_sections_size = loadinfo->textsize + loadinfo->datasize;
+
+	loadinfo->uheap->total_alloc_size = 0;
+	loadinfo->uheap->peak_alloc_size = 0;
 #endif
 
 	return OK;

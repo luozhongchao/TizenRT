@@ -81,6 +81,9 @@
 #if defined(CONFIG_NET_PKT)
 #include <tinyara/net/pkt.h>
 #endif
+#ifdef CONFIG_ARCH_PHY_INTERRUPT
+#include <tinyara/net/phy.h>
+#endif
 
 #include "up_internal.h"
 
@@ -593,9 +596,9 @@
  */
 
 struct stm32_ethmac_s {
-	uint8_t ifup: 1;				/* true:ifup false:ifdown */
-	uint8_t mbps100: 1;			/* 100MBps operation (vs 10 MBps) */
-	uint8_t fduplex: 1;			/* Full (vs. half) duplex */
+	uint8_t ifup:1;				/* true:ifup false:ifdown */
+	uint8_t mbps100:1;			/* 100MBps operation (vs 10 MBps) */
+	uint8_t fduplex:1;			/* Full (vs. half) duplex */
 	WDOG_ID txpoll;				/* TX poll timer */
 	WDOG_ID txtimeout;			/* TX timeout timer */
 #ifdef CONFIG_NET_NOINTS
@@ -3972,6 +3975,11 @@ int stm32_ethinitialize(int intf)
 	priv->txpoll = wd_create();	/* Create periodic poll timer */
 	priv->txtimeout = wd_create();	/* Create TX timeout timer */
 
+#ifdef CONFIG_ARCH_PHY_INTERRUPT
+	/* Initialize a semaphore for phy notification */
+
+	phy_notify_initialize();
+#endif
 	/* Configure GPIO pins to support Ethernet */
 
 	stm32_ethgpioconfig(priv);
